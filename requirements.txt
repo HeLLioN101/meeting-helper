@@ -1,0 +1,4 @@
+PyQt5
+PyAudioWPatch
+RealtimeSTT
+audioop-lts
