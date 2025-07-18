@@ -4,8 +4,9 @@ import time
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QTextEdit, 
                              QLineEdit, QFrame, QSplitter)
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, pyqtSlot
 from PyQt5.QtGui import QFont
+from ai import get_chatbot_response
 
 class TranscriptionWorker(QObject):
     text_ready = pyqtSignal(str, str)
@@ -68,6 +69,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Live Transcription & AI Assistant")
         self.setGeometry(100, 100, 1200, 800)
+        self.showMaximized()  # Always open in full screen
         
         self.shared_queue = shared_queue
         
@@ -220,66 +222,50 @@ class MainWindow(QMainWindow):
                 margin: 10px;
             }
         """)
-        
         layout = QVBoxLayout(panel)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
-        
+
         # Header
         header_layout = QHBoxLayout()
-        
         ai_icon = QLabel("✨")
         ai_icon.setFont(QFont("Arial", 20))
         ai_icon.setStyleSheet("color: #7C4DFF;")
-        
         title_layout = QVBoxLayout()
         title = QLabel("AI Assistant")
         title.setFont(QFont("Arial", 16, QFont.Bold))
         title.setStyleSheet("color: #333333;")
-        
         subtitle = QLabel("Intelligent meeting insights")
         subtitle.setFont(QFont("Arial", 12))
         subtitle.setStyleSheet("color: #666666;")
-        
         title_layout.addWidget(title)
         title_layout.addWidget(subtitle)
-        
         header_layout.addWidget(ai_icon)
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
-        
         layout.addLayout(header_layout)
-        
-        # Center content
-        layout.addStretch()
-        
-        center_layout = QVBoxLayout()
-        center_layout.setAlignment(Qt.AlignCenter)
-        
-        large_ai_icon = QLabel("🤖")
-        large_ai_icon.setFont(QFont("Arial", 48))
-        large_ai_icon.setStyleSheet("color: #7C4DFF;")
-        large_ai_icon.setAlignment(Qt.AlignCenter)
-        center_layout.addWidget(large_ai_icon)
-        
-        ai_ready_label = QLabel("AI ready to help")
-        ai_ready_label.setFont(QFont("Arial", 14, QFont.Bold))
-        ai_ready_label.setStyleSheet("color: #333333; margin-top: 20px;")
-        ai_ready_label.setAlignment(Qt.AlignCenter)
-        center_layout.addWidget(ai_ready_label)
-        
-        ai_instruction_label = QLabel("Ask a question to get intelligent insights")
-        ai_instruction_label.setFont(QFont("Arial", 12))
-        ai_instruction_label.setStyleSheet("color: #666666; margin-top: 10px;")
-        ai_instruction_label.setAlignment(Qt.AlignCenter)
-        center_layout.addWidget(ai_instruction_label)
-        
-        layout.addLayout(center_layout)
-        layout.addStretch()
-        
+
+        # Chat area
+        self.ai_chat_area = QTextEdit()
+        self.ai_chat_area.setReadOnly(True)
+        self.ai_chat_area.setStyleSheet("""
+            QTextEdit {
+                border: 2px solid #E3F2FD;
+                border-radius: 10px;
+                background-color: #FAFAFA;
+                padding: 20px;
+                font-size: 15px;
+                line-height: 2.0;
+                color: #333333;
+                font-family: Arial, sans-serif;
+                min-height: 300px;
+                margin-bottom: 10px;
+            }
+        """)
+        layout.addWidget(self.ai_chat_area, stretch=2)
+
         # Input section
         input_layout = QVBoxLayout()
-        
         self.ai_input = QLineEdit()
         self.ai_input.setPlaceholderText("Type your question for the AI...")
         self.ai_input.setFont(QFont("Arial", 12))
@@ -296,9 +282,7 @@ class MainWindow(QMainWindow):
                 background-color: white;
             }
         """)
-        
         button_layout = QHBoxLayout()
-        
         upload_btn = QPushButton("📎 Upload")
         upload_btn.setFont(QFont("Arial", 10))
         upload_btn.setStyleSheet("""
@@ -312,10 +296,8 @@ class MainWindow(QMainWindow):
                 color: #7C4DFF;
             }
         """)
-        
         button_layout.addWidget(upload_btn)
         button_layout.addStretch()
-        
         ask_btn = QPushButton("Ask")
         ask_btn.setFont(QFont("Arial", 10))
         ask_btn.setStyleSheet("""
@@ -329,7 +311,6 @@ class MainWindow(QMainWindow):
                 color: #7C4DFF;
             }
         """)
-        
         send_btn = QPushButton("Send")
         send_btn.setFont(QFont("Arial", 10, QFont.Bold))
         send_btn.setStyleSheet("""
@@ -344,15 +325,15 @@ class MainWindow(QMainWindow):
                 background-color: #6A3DE8;
             }
         """)
-        
         button_layout.addWidget(ask_btn)
         button_layout.addWidget(send_btn)
-        
         input_layout.addWidget(self.ai_input)
         input_layout.addLayout(button_layout)
-        
         layout.addLayout(input_layout)
-        
+
+        ask_btn.clicked.connect(self.handle_ai_send)
+        send_btn.clicked.connect(self.handle_ai_send)
+        self.ai_input.returnPressed.connect(self.handle_ai_send)  # Send on Enter
         return panel
     
     def toggle_transcription(self):
@@ -409,3 +390,31 @@ class MainWindow(QMainWindow):
             # Auto-scroll to bottom
             scrollbar = self.transcription_text.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
+    
+    @pyqtSlot()
+    def handle_ai_send(self):
+        user_text = self.ai_input.text().strip()
+        if not user_text:
+            return
+        self.append_ai_message(user_text, sender="user")
+        self.ai_input.clear()
+        threading.Thread(target=self.get_ai_response, args=(user_text,), daemon=True).start()
+
+    def append_ai_message(self, text, sender="ai"):
+        if sender == "user":
+            self.ai_chat_area.append(f'<div style="margin-bottom:10px;"><b style="color:#1976D2;">You:</b> {text}</div>')
+        else:
+            self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {text}</div>')
+        self.ai_chat_area.verticalScrollBar().setValue(self.ai_chat_area.verticalScrollBar().maximum())
+
+    def get_ai_response(self, user_text):
+        self.append_ai_message("Thinking...", sender="ai")
+        response = get_chatbot_response(user_text)
+        # Remove the last "Thinking..." message
+        cursor = self.ai_chat_area.textCursor()
+        cursor.movePosition(cursor.End)
+        cursor.select(cursor.BlockUnderCursor)
+        cursor.removeSelectedText()
+        cursor.deletePreviousChar()
+        self.ai_chat_area.setTextCursor(cursor)
+        self.append_ai_message(response, sender="ai")
