@@ -3,10 +3,14 @@ import threading
 import time
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QTextEdit, 
-                             QLineEdit, QFrame, QSplitter)
+                             QLineEdit, QFrame, QSplitter, QFileDialog)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, pyqtSlot
 from PyQt5.QtGui import QFont
 from ai import get_chatbot_response
+from PyPDF2 import PdfReader
+from docx import Document
+from pptx import Presentation
+import os
 
 class TranscriptionWorker(QObject):
     text_ready = pyqtSignal(str, str)
@@ -331,6 +335,7 @@ class MainWindow(QMainWindow):
         input_layout.addLayout(button_layout)
         layout.addLayout(input_layout)
 
+        upload_btn.clicked.connect(self.handle_upload_file)
         ask_btn.clicked.connect(self.handle_ai_send)
         send_btn.clicked.connect(self.handle_ai_send)
         self.ai_input.returnPressed.connect(self.handle_ai_send)  # Send on Enter
@@ -383,14 +388,30 @@ class MainWindow(QMainWindow):
         self.instruction_label.setText('Press "Start" to begin transcription')
     
     def update_transcription(self, new_text, tag):
+        from PyQt5.QtCore import QTimer
         if self.is_transcribing:
             formatted_text = f"[{tag.upper()}] {new_text}"
             self.transcription_text.append(formatted_text)
-            
-            # Auto-scroll to bottom
-            scrollbar = self.transcription_text.verticalScrollBar()
-            scrollbar.setValue(scrollbar.maximum())
-    
+            QTimer.singleShot(0, lambda: self.transcription_text.verticalScrollBar().setValue(self.transcription_text.verticalScrollBar().maximum()))
+
+    def append_ai_message(self, text, sender="ai"):
+        from PyQt5.QtCore import Qt, QTimer
+        import re
+        def markdown_to_html(md):
+            html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', md)
+            html = re.sub(r'\*(.*?)\*', r'<i>\1</i>', html)
+            html = re.sub(r'\n(\d+)\. ', r'<br><b>\1.</b> ', html)
+            html = re.sub(r'\n\* ', r'<br>&bull; ', html)
+            html = html.replace('\n', '<br>')
+            return html
+        if sender == "user":
+            self.ai_chat_area.append(f'<div style="margin-bottom:10px;"><b style="color:#1976D2;">You:</b> {text}</div>')
+        else:
+            formatted = markdown_to_html(text)
+            self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {formatted}</div>')
+        # Use QTimer to ensure scroll happens after append
+        QTimer.singleShot(0, lambda: self.ai_chat_area.verticalScrollBar().setValue(self.ai_chat_area.verticalScrollBar().maximum()))
+
     @pyqtSlot()
     def handle_ai_send(self):
         user_text = self.ai_input.text().strip()
@@ -399,13 +420,6 @@ class MainWindow(QMainWindow):
         self.append_ai_message(user_text, sender="user")
         self.ai_input.clear()
         threading.Thread(target=self.get_ai_response, args=(user_text,), daemon=True).start()
-
-    def append_ai_message(self, text, sender="ai"):
-        if sender == "user":
-            self.ai_chat_area.append(f'<div style="margin-bottom:10px;"><b style="color:#1976D2;">You:</b> {text}</div>')
-        else:
-            self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {text}</div>')
-        self.ai_chat_area.verticalScrollBar().setValue(self.ai_chat_area.verticalScrollBar().maximum())
 
     def get_ai_response(self, user_text):
         self.append_ai_message("Thinking...", sender="ai")
@@ -418,3 +432,36 @@ class MainWindow(QMainWindow):
         cursor.deletePreviousChar()
         self.ai_chat_area.setTextCursor(cursor)
         self.append_ai_message(response, sender="ai")
+
+    def handle_upload_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select a file", "", "Documents (*.pdf *.docx *.pptx)")
+        if not file_path:
+            return
+        ext = os.path.splitext(file_path)[1].lower()
+        text = ""
+        try:
+            if ext == ".pdf":
+                reader = PdfReader(file_path)
+                for page in reader.pages:
+                    text += page.extract_text() + "\n"
+            elif ext == ".docx":
+                doc = Document(file_path)
+                for para in doc.paragraphs:
+                    text += para.text + "\n"
+            elif ext == ".pptx":
+                prs = Presentation(file_path)
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text"):
+                            text += shape.text + "\n"
+            else:
+                self.append_ai_message("Unsupported file type.", sender="ai")
+                return
+        except Exception as e:
+            self.append_ai_message(f"Error reading file: {e}", sender="ai")
+            return
+        if not text.strip():
+            self.append_ai_message("No text found in the file.", sender="ai")
+            return
+        self.append_ai_message(f"Uploaded file content. Summarizing...", sender="user")
+        threading.Thread(target=self.get_ai_response, args=(f"Summarize this file:\n{text[:4000]}",), daemon=True).start()
