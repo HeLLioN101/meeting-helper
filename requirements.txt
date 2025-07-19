@@ -2,3 +2,7 @@ PyQt5
 PyAudioWPatch
 RealtimeSTT
 audioop-lts
+google-generativeai
+python-docx
+PyPDF2
+python-pptx
