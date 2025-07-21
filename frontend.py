@@ -378,12 +378,12 @@ class MainWindow(QMainWindow):
         input_layout.addLayout(button_layout)
         layout.addLayout(input_layout)
 
-        upload_btn.clicked.connect(self.handle_upload_file)
         ask_btn.clicked.connect(self.handle_ai_send)
         send_btn.clicked.connect(self.handle_ai_send)
-        self.ai_input.returnPressed.connect(self.handle_ai_send)  # Send on Enter
+        self.ai_input.returnPressed.connect(self.handle_ai_send)
+        upload_btn.clicked.connect(self.handle_upload_file)
         return panel
-    
+
     def toggle_transcription(self):
         if not self.is_transcribing:
             self.start_transcription()
@@ -435,10 +435,15 @@ class MainWindow(QMainWindow):
         if self.is_transcribing:
             formatted_text = f"[{tag.upper()}] {new_text}"
             self.transcription_text.append(formatted_text)
-            QTimer.singleShot(0, lambda: self.transcription_text.verticalScrollBar().setValue(self.transcription_text.verticalScrollBar().maximum()))
+            def scroll_to_bottom():
+                bar = self.transcription_text.verticalScrollBar()
+                bar.setValue(bar.maximum())
+            QTimer.singleShot(0, scroll_to_bottom)
+            QTimer.singleShot(50, scroll_to_bottom)
+            QTimer.singleShot(100, scroll_to_bottom)
 
     def append_ai_message(self, text, sender="ai"):
-        from PyQt5.QtCore import Qt, QTimer
+        from PyQt5.QtCore import QTimer
         import re
         def markdown_to_html(md):
             html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', md)
@@ -452,19 +457,13 @@ class MainWindow(QMainWindow):
         else:
             formatted = markdown_to_html(text)
             self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {formatted}</div>')
-        # Always scroll to bottom on new message
+        # Robust real-time scroll: force scroll after event loop processes
         def scroll_to_bottom():
-            self.ai_chat_area.verticalScrollBar().setValue(self.ai_chat_area.verticalScrollBar().maximum())
+            bar = self.ai_chat_area.verticalScrollBar()
+            bar.setValue(bar.maximum())
         QTimer.singleShot(0, scroll_to_bottom)
-
-    @pyqtSlot()
-    def handle_ai_send(self):
-        user_text = self.ai_input.text().strip()
-        if not user_text:
-            return
-        self.append_ai_message(user_text, sender="user")
-        self.ai_input.clear()
-        threading.Thread(target=self.get_ai_response, args=(user_text,), daemon=True).start()
+        QTimer.singleShot(50, scroll_to_bottom)
+        QTimer.singleShot(100, scroll_to_bottom)
 
     def get_ai_response(self, user_text):
         self.append_ai_message("Thinking...", sender="ai")
@@ -510,3 +509,30 @@ class MainWindow(QMainWindow):
             return
         self.append_ai_message(f"Uploaded file content. Summarizing...", sender="user")
         threading.Thread(target=self.get_ai_response, args=(f"Summarize this file:\n{text[:4000]}",), daemon=True).start()
+
+    def handle_ai_send(self):
+        user_text = self.ai_input.text()
+        if not user_text.strip():
+            return
+        self.append_ai_message(user_text, sender="user")
+        self.ai_input.clear()
+        threading.Thread(target=self.get_ai_response_and_scroll, args=(user_text,), daemon=True).start()
+
+    def get_ai_response_and_scroll(self, user_text):
+        from PyQt5.QtCore import QTimer
+        self.append_ai_message("Thinking...", sender="ai")
+        response = get_chatbot_response(user_text)
+        # Remove the last "Thinking..." message
+        def remove_last():
+            cursor = self.ai_chat_area.textCursor()
+            cursor.movePosition(cursor.End)
+            cursor.select(cursor.BlockUnderCursor)
+            cursor.removeSelectedText()
+            cursor.deletePreviousChar()
+            self.ai_chat_area.setTextCursor(cursor)
+        QTimer.singleShot(0, remove_last)
+        def append_and_scroll():
+            self.append_ai_message(response, sender="ai")
+            bar = self.ai_chat_area.verticalScrollBar()
+            bar.setValue(bar.maximum())
+        QTimer.singleShot(50, append_and_scroll)
