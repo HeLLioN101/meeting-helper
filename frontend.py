@@ -5,6 +5,11 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QPushButton, QTextEdit, 
                              QLineEdit, QFrame, QSplitter, QFileDialog)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, pyqtSlot
+try:
+    from PyQt5.QtCore import QMetaType, QTextCursor
+    QMetaType.type('QTextCursor')
+except Exception:
+    pass
 from PyQt5.QtGui import QFont
 from ai import get_chatbot_response
 from PyPDF2 import PdfReader
@@ -160,6 +165,25 @@ class MainWindow(QMainWindow):
                 font-family: Arial, sans-serif;
                 min-height: 400px;
             }
+            QScrollBar:vertical {
+                border: none;
+                background: #F0F0F0;
+                width: 12px;
+                margin: 0px 0px 0px 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                          stop:0 #1976D2, stop:1 #90CAF9);
+                min-height: 30px;
+                border-radius: 6px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
         """)
         self.transcription_text.hide()
         layout.addWidget(self.transcription_text, stretch=3)
@@ -264,6 +288,25 @@ class MainWindow(QMainWindow):
                 font-family: Arial, sans-serif;
                 min-height: 300px;
                 margin-bottom: 10px;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #F0F0F0;
+                width: 12px;
+                margin: 0px 0px 0px 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                          stop:0 #7C4DFF, stop:1 #BBDEFB);
+                min-height: 30px;
+                border-radius: 6px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
             }
         """)
         layout.addWidget(self.ai_chat_area, stretch=2)
@@ -409,8 +452,10 @@ class MainWindow(QMainWindow):
         else:
             formatted = markdown_to_html(text)
             self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {formatted}</div>')
-        # Use QTimer to ensure scroll happens after append
-        QTimer.singleShot(0, lambda: self.ai_chat_area.verticalScrollBar().setValue(self.ai_chat_area.verticalScrollBar().maximum()))
+        # Always scroll to bottom on new message
+        def scroll_to_bottom():
+            self.ai_chat_area.verticalScrollBar().setValue(self.ai_chat_area.verticalScrollBar().maximum())
+        QTimer.singleShot(0, scroll_to_bottom)
 
     @pyqtSlot()
     def handle_ai_send(self):
