@@ -186,10 +186,10 @@ class MainWindow(QMainWindow):
             }
         """)
         self.transcription_text.hide()
-        layout.addWidget(self.transcription_text, stretch=3)
+        layout.addWidget(self.transcription_text, stretch=6)
         
         # Center content
-        layout.addStretch(1)
+        layout.addStretch(0)
         
         center_layout = QVBoxLayout()
         center_layout.setAlignment(Qt.AlignCenter)
@@ -212,7 +212,7 @@ class MainWindow(QMainWindow):
         center_layout.addWidget(self.instruction_label)
         
         layout.addLayout(center_layout)
-        layout.addStretch(1)
+        layout.addStretch(0)
         
         # Stop button
         stop_layout = QHBoxLayout()
