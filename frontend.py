@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         self.showMaximized()  # Always open in full screen
         
         self.shared_queue = shared_queue
+        self.last_uploaded_file_text = None  # Store last uploaded file text
         
         # Set up UI
         main_widget = QWidget()
@@ -452,19 +453,30 @@ class MainWindow(QMainWindow):
         else:
             formatted = markdown_to_html(text)
             self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {formatted}</div>')
-        # Always scroll to bottom on new message
-        def scroll_to_bottom():
-            self.ai_chat_area.verticalScrollBar().setValue(self.ai_chat_area.verticalScrollBar().maximum())
-        QTimer.singleShot(0, scroll_to_bottom)
+            # Robust scroll to bottom only for AI response
+            def scroll_to_bottom():
+                bar = self.ai_chat_area.verticalScrollBar()
+                bar.setValue(bar.maximum())
+            QTimer.singleShot(0, scroll_to_bottom)
+            QTimer.singleShot(50, scroll_to_bottom)
+            QTimer.singleShot(100, scroll_to_bottom)
+            QTimer.singleShot(200, scroll_to_bottom)
+            QTimer.singleShot(400, scroll_to_bottom)
+            QTimer.singleShot(800, scroll_to_bottom)
 
     @pyqtSlot()
     def handle_ai_send(self):
-        user_text = self.ai_input.text().strip()
+        user_text = self.ai_input.text()  # Removed .strip() to preserve all characters
         if not user_text:
             return
         self.append_ai_message(user_text, sender="user")
         self.ai_input.clear()
-        threading.Thread(target=self.get_ai_response, args=(user_text,), daemon=True).start()
+        # If file uploaded, prepend its content to the prompt
+        if self.last_uploaded_file_text:
+            prompt = f"File context:\n{self.last_uploaded_file_text}\n\nUser question: {user_text}"
+        else:
+            prompt = user_text
+        threading.Thread(target=self.get_ai_response, args=(prompt,), daemon=True).start()
 
     def get_ai_response(self, user_text):
         self.append_ai_message("Thinking...", sender="ai")
@@ -508,5 +520,6 @@ class MainWindow(QMainWindow):
         if not text.strip():
             self.append_ai_message("No text found in the file.", sender="ai")
             return
+        self.last_uploaded_file_text = text[:4000]  # Store up to 4000 chars for context
         self.append_ai_message(f"Uploaded file content. Summarizing...", sender="user")
         threading.Thread(target=self.get_ai_response, args=(f"Summarize this file:\n{text[:4000]}",), daemon=True).start()
