@@ -480,12 +480,11 @@ class MainWindow(QMainWindow):
     def get_ai_response(self, user_text):
         self.append_ai_message("Thinking...", sender="ai")
         response = get_chatbot_response(user_text)
-        # Remove the last "Thinking..." message
+        # Remove the last "Thinking..." message only
         cursor = self.ai_chat_area.textCursor()
         cursor.movePosition(cursor.End)
         cursor.select(cursor.BlockUnderCursor)
         cursor.removeSelectedText()
-        cursor.deletePreviousChar()
         self.ai_chat_area.setTextCursor(cursor)
         self.append_ai_message(response, sender="ai")
 
