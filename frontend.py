@@ -453,16 +453,15 @@ class MainWindow(QMainWindow):
         else:
             formatted = markdown_to_html(text)
             self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {formatted}</div>')
-            # Robust scroll to bottom only for AI response
-            def scroll_to_bottom():
+            # Enhance smooth scrolling for mouse/touchpad
+            self.ai_chat_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+            self.ai_chat_area.verticalScrollBar().setSingleStep(5)
+            self.ai_chat_area.verticalScrollBar().setPageStep(50)
+            def smooth_scroll():
                 bar = self.ai_chat_area.verticalScrollBar()
-                bar.setValue(bar.maximum())
-            QTimer.singleShot(0, scroll_to_bottom)
-            QTimer.singleShot(50, scroll_to_bottom)
-            QTimer.singleShot(100, scroll_to_bottom)
-            QTimer.singleShot(200, scroll_to_bottom)
-            QTimer.singleShot(400, scroll_to_bottom)
-            QTimer.singleShot(800, scroll_to_bottom)
+                for i in range(bar.value(), bar.maximum()+1, 5):
+                    QTimer.singleShot((i-bar.value())*2, lambda v=i: bar.setValue(v))
+            QTimer.singleShot(0, smooth_scroll)
 
     @pyqtSlot()
     def handle_ai_send(self):
