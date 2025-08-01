@@ -23,7 +23,7 @@ def record_device(device_index, tag, channels, sample_rate, trans_queue):
 
     recorder = AudioToTextRecorder(
         use_microphone=False,
-        model='base.en',
+        model='hinglish_ct2_model',
         spinner=False,
         silero_deactivity_detection=True,
         post_speech_silence_duration=0.2,
