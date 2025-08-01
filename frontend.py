@@ -436,10 +436,10 @@ class MainWindow(QMainWindow):
         if self.is_transcribing:
             formatted_text = f"[{tag.upper()}] {new_text}"
             self.transcription_text.append(formatted_text)
-            QTimer.singleShot(0, lambda: self.transcription_text.verticalScrollBar().setValue(self.transcription_text.verticalScrollBar().maximum()))
+            scrollbar = self.transcription_text.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
 
     def append_ai_message(self, text, sender="ai"):
-        from PyQt5.QtCore import Qt, QTimer
         import re
         def markdown_to_html(md):
             html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', md)
@@ -453,15 +453,12 @@ class MainWindow(QMainWindow):
         else:
             formatted = markdown_to_html(text)
             self.ai_chat_area.append(f'<div style="margin-bottom:20px;"><b style="color:#7C4DFF;">AI:</b> {formatted}</div>')
-            # Enhance smooth scrolling for mouse/touchpad
-            self.ai_chat_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-            self.ai_chat_area.verticalScrollBar().setSingleStep(5)
-            self.ai_chat_area.verticalScrollBar().setPageStep(50)
-            def smooth_scroll():
-                bar = self.ai_chat_area.verticalScrollBar()
-                for i in range(bar.value(), bar.maximum()+1, 5):
-                    QTimer.singleShot((i-bar.value())*2, lambda v=i: bar.setValue(v))
-            QTimer.singleShot(0, smooth_scroll)
+        
+        cursor = self.ai_chat_area.textCursor()
+        cursor.movePosition(cursor.End)
+        self.ai_chat_area.setTextCursor(cursor)
+        self.ai_chat_area.ensureCursorVisible()
+
 
     @pyqtSlot()
     def handle_ai_send(self):
